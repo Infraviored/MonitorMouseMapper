@@ -1,17 +1,20 @@
+
 # MonitorMouseMapper
 
 ## Introduction
 
-Introducing **MonitorMouseMapper**, a Python-based solution designed to make your multi-monitor setup a seamless experience! This utility smartly manages your mouse movement when you have monitors with different resolutions, positioned above and below each other.
+Make your multi-monitor life easier with **MonitorMouseMapper**! This Python-based utility eliminates the hassle of dealing with different monitor resolutions and DPIs. Designed specifically for setups where you have a high-DPI laptop monitor centered below a larger, lower-DPI external monitor.
+
+## 🔥 Highlight: DPI Scaling Management
+
+The core functionality of **MonitorMouseMapper** is to handle DPI scaling issues seamlessly as you move your mouse pointer between monitors with different DPIs. No more awkward jumps or stutters!
 
 ## Features
 
-- 🖥️ **Automatic Monitor Detection**: Detects connected monitors and sets up your mouse to move smoothly between them.
-- 🖱️ **Mouse Position Management**: Manages mouse pointer position intelligently when moving between monitors.
-- ⚙️ **Custom Configuration**: Easy setup and customization via a JSON config file.
-- 📐 **DPI Scaling**: Handles monitors with different DPIs elegantly.
-- 🛡️ **Safety Regions**: Allows setting a "safety region" to avoid accidental jumps between monitors.
-- 💼 **Plug-and-Play**: Automatic reconfiguration when a new monitor is connected.
+- 🖥️ **Automatic Monitor Detection**: No need for manual configuration. Automatically detects your monitors.
+- 🖱️ **Smart Mouse Positioning**: Ensures your mouse moves smoothly between your top and bottom monitors.
+- ⚙️ **Configuration File**: Customize your experience through a simple JSON config file.
+- 🔄 **Dynamic Reconfiguration**: Automatically adapts when you connect or disconnect monitors.
 
 ## Installation
 
@@ -30,32 +33,41 @@ Introducing **MonitorMouseMapper**, a Python-based solution designed to make you
 
 ## How to Use
 
-1. **Initial Configuration**: On the first run, the script will ask you to pick your bottom and top monitors from a list of available options.
-2. **Width Setup**: You'll be prompted to enter the width (in cm) of each monitor.
-3. **Safety Region**: Optionally, you can set up a "safety region" in pixels to avoid accidental jumps.
-4. **Run and Forget**: Once configured, the script will run in the background, taking care of your mouse movement.
+1. **Initial Run**: Upon first launch, you'll be prompted to choose your top and bottom monitors and enter their widths in cm.
+2. **Run and Forget**: Once set up, **MonitorMouseMapper** takes care of everything automatically.
+
+## Example Setup
+
+Imagine you have a smaller, high-DPI laptop monitor centered below a larger, low-DPI external monitor. With **MonitorMouseMapper**, not only will your mouse pointer transition smoothly between these two, but it'll also handle the DPI scaling intelligently.
 
 ## Requirements
 
 - Python 3.x
 - `pynput` library
-- `xrandr` utility on Linux systems
+- `xrandr` utility
+- 🐧 **Ubuntu Support**: Currently, this utility only supports Ubuntu.
+
+## Run at Startup
+
+To run **MonitorMouseMapper** at startup, add the following command to your startup applications:
+
+```bash
+python3 /path/to/MonitorMouseMapper.py
+```
 
 ## Troubleshooting
 
-If you encounter any issues, you can:
-- Check if `xrandr` is properly installed and up-to-date.
-- Delete the `config.json` file and run the script again for a fresh configuration.
-- Raise an issue on this GitHub repository.
+- Make sure `xrandr` is installed and updated.
+- For a clean slate, you can delete the `config.json` file and re-run the script.
 
 ## Contribution
 
-Feel free to fork the project, open a pull request, or submit suggestions and bugs as GitHub issues.
+Contributions are welcome! Feel free to fork the project, submit pull requests, or raise issues.
 
 ## License
 
-This project is open source, under the MIT license.
+This project is licensed under the MIT license.
 
 ---
 
-Make your multi-monitor life easier and more organized with **MonitorMouseMapper**! 🌟
+Simplify your multi-monitor setup with **MonitorMouseMapper**. Say goodbye to annoying DPI issues and hello to a smoother multi-monitor experience! 🌟

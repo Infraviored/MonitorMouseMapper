@@ -64,7 +64,10 @@ class MonitorManager:
         self.top_monitor = self.config['top_monitor'] if self.config['top_monitor'] in available_monitors else None
 
 # New function
-    def read_or_create_config(self, filename="config.json"):
+    def read_or_create_config(self,):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
+        configfile = os.path.join(script_dir, "config.json")
         # Initialize a flag to track whether the config file has changed
         config_changed = False
         available_bottom_monitor = None  # Add this line
@@ -72,8 +75,8 @@ class MonitorManager:
 
 
         # Attempt to read existing config file if it exists
-        if os.path.exists(filename):
-            with open(filename, "r") as f:
+        if os.path.exists(configfile):
+            with open(configfile, "r") as f:
                 self.config = json.load(f)
 
             # Fetch the list of available monitors
@@ -89,7 +92,7 @@ class MonitorManager:
 
             # If at least one top and one bottom monitor are available, assign them
             if available_bottom_monitor is not None and available_top_monitor is not None:
-                print(f"Config read from {filename}: {self.config}")
+                print(f"Config read from {configfile}: {self.config}")
                 self.bottom_monitor = available_bottom_monitor
                 self.top_monitor = available_top_monitor
                 return
@@ -141,7 +144,7 @@ class MonitorManager:
                 self.config["safety_region"] = input("Enter the safety region in pixels (default: 200): ") or "200"
 
             # Save the updated config to the file
-            with open(filename, "w") as f:
+            with open(configfile, "w") as f:
                 json.dump(self.config, f)
 
             print(f"New config created: {self.config}")

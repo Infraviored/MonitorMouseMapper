@@ -1,4 +1,4 @@
-# README for MonitorMouseMapper
+# MonitorMouseMapper
 
 ## Introduction
 

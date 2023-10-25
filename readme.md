@@ -52,8 +52,9 @@ Imagine you have a smaller, high-DPI laptop monitor centered below a larger, low
 To run **MonitorMouseMapper** at startup, add the following command to your startup applications:
 
 ```bash
-python3 /path/to/MonitorMouseMapper.py
+bash -c "sleep 5 && python3 /home/flo/Programs/MonitorMouseMapper/MonitorMouseMapper.py"
 ```
+The delay is necessary to ensure that the script runs after your monitors have been detected. Adjust it to your machine's speed.
 
 ## Troubleshooting
 

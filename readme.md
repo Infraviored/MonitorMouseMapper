@@ -1,6 +1,6 @@
 
 # MonitorMouseMapper
-
+![Monitor Setup](images/dual_screens.png)
 ## Introduction
 
 Make your multi-monitor life easier with **MonitorMouseMapper**! This Python-based utility eliminates the hassle of dealing with different monitor resolutions and DPIs. Designed specifically for setups where you have a high-DPI laptop monitor centered below a larger, lower-DPI external monitor.
@@ -55,6 +55,15 @@ To run **MonitorMouseMapper** at startup, add the following command to your star
 bash -c "sleep 5 && python3 /home/flo/Programs/MonitorMouseMapper/MonitorMouseMapper.py"
 ```
 The delay is necessary to ensure that the script runs after your monitors have been detected. Adjust it to your machine's speed.
+
+## Create desktop shortcut
+
+To create a shortcut, make the create_desktop_shortcut.sh script executable and run it:
+
+```bash
+chmod +x create_desktop_shortcut.sh
+./create_desktop_shortcut.sh
+```
 
 ## Troubleshooting
 

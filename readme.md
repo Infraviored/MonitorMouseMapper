@@ -65,9 +65,9 @@ chmod +x create_desktop_shortcut.sh
 ./create_desktop_shortcut.sh
 ```
 Choose between hills and tree icons:
+
 <img src="images/icon_hills.png" width="50%">
-![Hills](images/icon_hills.png)
-![Trees](images/icon_tree.png)
+<img src="images/icon_tree.png" width="50%">
 
 ## Troubleshooting
 

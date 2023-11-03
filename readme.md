@@ -1,6 +1,6 @@
 
 # MonitorMouseMapper
-![Monitor Setup](images/dual_screens.png)
+![Monitor Setup](images/full_setup_hills.png)
 ## Introduction
 
 Make your multi-monitor life easier with **MonitorMouseMapper**! This Python-based utility eliminates the hassle of dealing with different monitor resolutions and DPIs. Designed specifically for setups where you have a high-DPI laptop monitor centered below a larger, lower-DPI external monitor.
@@ -64,6 +64,8 @@ To create a shortcut, make the create_desktop_shortcut.sh script executable and 
 chmod +x create_desktop_shortcut.sh
 ./create_desktop_shortcut.sh
 ```
+Choose between hills and tree icons:
+<img src="images/icon_hills.png" width="49%"><img src="images/icon_tree.png" width="49%">
 
 ## Troubleshooting
 

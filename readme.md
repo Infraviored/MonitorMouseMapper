@@ -64,9 +64,9 @@ To create a shortcut, make the create_desktop_shortcut.sh script executable and 
 chmod +x create_desktop_shortcut.sh
 ./create_desktop_shortcut.sh
 ```
-Choose between hills and trees icon:
+Choose between hills and tree icons:
 ![Hills](images/icon_hills.png)
-![Trees](images/icon_trees.png)
+![Trees](images/icon_tree.png)
 
 ## Troubleshooting
 

@@ -97,10 +97,21 @@ class MonitorManager:
             with open(configfile, "r") as f:
                 self.config = json.load(f)
 
+            # Check for available bottom and top monitors
             available_bottom_monitor = next(
                 (monitor for monitor in self.config.get('bottom_monitors', []) if monitor['name'] in available_monitors), None)
             available_top_monitor = next(
                 (monitor for monitor in self.config.get('top_monitors', []) if monitor['name'] in available_monitors), None)
+
+            if available_bottom_monitor:
+                print("Configured Bottom monitor found.")
+            else:
+                print("No configured bottom monitor found.")
+
+            if available_top_monitor:
+                print("Configured Top monitor found.")
+            else:
+                print("No configured top monitor found.")
 
             if is_config_complete(self.config) and available_bottom_monitor and available_top_monitor:
                 print(f"Config read from {configfile}: {self.config}")
@@ -109,11 +120,12 @@ class MonitorManager:
                 self.mouse_height = int(available_bottom_monitor.get('mouse_height_px', 0))
                 return
             else:
-                print("Config file is incomplete or monitors not found. Reconfiguring...")
+                print("Config file is incomplete. Starting remaining configuration...")
 
-        print("No existing or complete config file found. Creating...")
-        self.config = {'bottom_monitors': [], 'top_monitors': []}
-        config_changed = True
+        else:
+            print("No existing config file found. Creating new config...")
+            self.config = {'bottom_monitors': [], 'top_monitors': []}
+            config_changed = True
 
         print("Available Monitors:")
         for i, monitor in enumerate(available_monitors):

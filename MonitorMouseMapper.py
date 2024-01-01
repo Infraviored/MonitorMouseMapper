@@ -27,7 +27,12 @@ class MonitorManager:
         self.prev_y = None
         self.do_jump = True
         self.mouse_controller = Controller()
+        self.set_120_mousespeed()
         self.run()
+
+    def set_120_mousespeed(self):
+        #xinput --set-prop 35 217 1.2 0 0 0 1.2 0 0 0 1
+        subprocess.run(['xinput', '--set-prop', '35', '217', '1.2', '0', '0', '0', '1.2', '0', '0', '0', '1'])
 
     def pick_monitors(self):
         available_monitors = self.fetch_available_monitors()
@@ -188,7 +193,7 @@ class MonitorManager:
         if do_print:
             print(f"\r X: {x}, Y: {y}", end="   ", flush=True)
 
-        if abs(y - self.top_height) >= int(self.config["safety_region"]):
+        if abs(y - self.top_height) >= int(self.config["safety_region"]) or x >= self.top_width:
             return
 
         if self.do_jump and self.prev_y is not None:

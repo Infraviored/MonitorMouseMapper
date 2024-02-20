@@ -6,6 +6,10 @@ from pynput.mouse import Controller, Listener
 import json
 import os
 from time import sleep
+import signal
+import sys
+import atexit
+
 
 global sleep_duration
 sleep_duration = 0.01
@@ -15,9 +19,11 @@ do_print = True
 # Initialize mouse controller
 mouse_controller = Controller()
 
-
 class MonitorManager:
     def __init__(self):
+        self.pid_file = "/tmp/monitor_manager.pid"
+        self.register_signal_handlers()
+        self.startup_pid_check()
         self.config = None
         self.read_or_create_config()
         self.pick_monitors()
@@ -29,6 +35,40 @@ class MonitorManager:
         self.mouse_controller = Controller()
         self.set_120_mousespeed()
         self.run()
+
+    def register_signal_handlers(self):
+        signal.signal(signal.SIGTERM, self.signal_handler)
+        signal.signal(signal.SIGINT, self.signal_handler)
+
+    def signal_handler(self, signum, frame):
+        self.cleanup_pid_file()
+        sys.exit(0)
+
+    def cleanup_pid_file(self):
+        if os.path.exists(self.pid_file):
+            os.remove(self.pid_file)
+        print("Cleaned up PID file and exiting.")
+
+    def startup_pid_check(self):
+        if os.path.exists(self.pid_file):
+            with open(self.pid_file, "r") as f:
+                old_pid = int(f.read())
+            try:
+                os.kill(old_pid, 0)  # Check if process is running
+                print(f"An instance of the script is already running with PID {old_pid}. Stopping it.")
+                os.kill(old_pid, signal.SIGTERM)  # Terminate the old process
+                sleep(1)  # Give it some time to terminate
+                # Since there was a running instance, we exit the new instance after killing the old one
+                print("Terminated the old instance. Exiting the new instance to prevent duplicates.")
+                exit()
+            except OSError:
+                print("No running instance found. Starting a new one.")
+        else:
+            print("No existing PID file found. Starting a new instance.")
+        
+        with open(self.pid_file, "w") as f:
+            f.write(str(os.getpid()))
+
 
     def set_120_mousespeed(self):
         #xinput --set-prop 35 217 1.2 0 0 0 1.2 0 0 0 1
@@ -223,3 +263,4 @@ class MonitorManager:
 
 if __name__ == "__main__":
     monitor_manager = MonitorManager()
+    atexit.register(monitor_manager.cleanup_pid_file)

@@ -33,7 +33,7 @@ class MonitorManager:
         self.prev_y = None
         self.do_jump = True
         self.mouse_controller = Controller()
-        self.set_120_mousespeed()
+        self.set_mousespeed()
         self.run()
 
     def register_signal_handlers(self):
@@ -70,9 +70,10 @@ class MonitorManager:
             f.write(str(os.getpid()))
 
 
-    def set_120_mousespeed(self):
-        #xinput --set-prop 35 217 1.2 0 0 0 1.2 0 0 0 1
-        subprocess.run(['xinput', '--set-prop', '35', '217', '1.2', '0', '0', '0', '1.2', '0', '0', '0', '1'])
+    def set_mousespeed(self):
+        if self.config.get("mousespeed_factor") != "1.0":
+            print(f"Setting mousespeed factor to {self.config.get('mousespeed_factor')}")
+            subprocess.run(['xinput', '--set-prop', self.config.get("mouse_id"), self.config.get("coordinate_transformation_matrix_id"), self.config.get("mousespeed_factor"), '0', '0', '0', self.config.get("mousespeed_factor"), '0', '0', '0', '1'])
 
     def pick_monitors(self):
         available_monitors = self.fetch_available_monitors()
@@ -132,6 +133,11 @@ class MonitorManager:
                     return False
             if 'safety_region' not in config:
                 return False
+            if 'mousespeed_factor' not in config:
+                return False
+            if config.get("mousespeed_factor") != "1.0":
+                if "mouse_id" not in config or "coordinate_transformation_matrix_id" not in config:
+                    return False
             return True
 
         available_monitors = self.fetch_available_monitors()
@@ -197,6 +203,31 @@ class MonitorManager:
 
         if "safety_region" not in self.config:
             self.config["safety_region"] = input("Enter the safety region in pixels (default: 200): ") or "200"
+            config_changed = True
+
+        if "mousespeed_factor" not in self.config:
+            self.config["mousespeed_factor"] = input("Mousespeed factor to enable more than Ubuntus 100% (default: 1.0): ") or "1.0"
+            config_changed = True
+        
+        if self.config.get("mousespeed_factor") != "1.0":
+            def find_matrix_id(device_id):
+                stream = os.popen(f'xinput list-props {device_id}')
+                output = stream.read()
+                
+                for line in output.split('\n'):
+                    if "Coordinate Transformation Matrix" in line:
+                        parts = line.split()
+                        for part in parts:
+                            if '(' in part and ')' in part:
+                                return part.split('(')[1].split(')')[0]
+                return None
+            if "mouse_id" not in self.config or "coordinate_transformation_matrix_id" not in self.config:
+                print("Select the number of the mouse you want to use:")
+                subprocess.run(['xinput', '--list'], text=True)
+                self.config["mouse_id"] = input("Enter the mouse id: ")
+                self.config["coordinate_transformation_matrix_id"] = find_matrix_id(self.config["mouse_id"])
+                print(f"Mouse id: {self.config['mouse_id']}, Coordinate Transformation Matrix id: {self.config['coordinate_transformation_matrix_id']}")
+                config_changed = True
 
         if config_changed:
             with open(configfile, "w") as f:

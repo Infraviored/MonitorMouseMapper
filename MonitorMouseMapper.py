@@ -334,6 +334,7 @@ class MonitorManager:
             if confirm == "Y":
                 print("Setup confirmed. Saving configuration.")
                 self.save_config()
+                self.prompt_service_installation()
                 break
             else:
                 print("Restarting setup process...")
@@ -414,6 +415,15 @@ class MonitorManager:
         self.do_jump = True
         self.mouse_controller = Controller()
         self.set_mousespeed()
+
+    def prompt_service_installation(self):
+        install_service = input("Do you want to install this script as a system service? (Y/N): ").upper()
+        if install_service == "Y":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            install_script = os.path.join(script_dir, "install_service.py")
+            subprocess.run(["python3", install_script])
+        else:
+            print("Skipping service installation. You can run the script manually.")
 
 
 if __name__ == "__main__":

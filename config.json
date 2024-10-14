@@ -1,1 +1,42 @@
-{"bottom_monitors": [{"name": "eDP-1", "width_cm": "31", "mouse_height_px": "30"}], "top_monitors": [{"name": "DP-1-2", "width_cm": "51"}], "safety_region": "200"}
+{
+  "monitors": [
+    {
+      "name": "eDP-1",
+      "resolution": "1920x1200",
+      "width": 1920,
+      "height": 1200,
+      "x_offset": 0,
+      "y_offset": 1110,
+      "width_mm": 302,
+      "height_mm": 189,
+      "primary": false
+    },
+    {
+      "name": "DP-3-1",
+      "resolution": "1920x1080",
+      "width": 1920,
+      "height": 1080,
+      "x_offset": 0,
+      "y_offset": 0,
+      "width_mm": 527,
+      "height_mm": 296,
+      "primary": true
+    },
+    {
+      "name": "DP-3-2",
+      "resolution": "1920x1080",
+      "width": 1920,
+      "height": 1080,
+      "x_offset": 1920,
+      "y_offset": 0,
+      "width_mm": 509,
+      "height_mm": 286,
+      "primary": false
+    }
+  ],
+  "top_monitor": "DP-3-1",
+  "bottom_monitor": "eDP-1",
+  "safety_region": "200",
+  "mousespeed_factor": "1.0",
+  "mouse_height": "30"
+}

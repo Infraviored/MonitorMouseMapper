@@ -9,6 +9,7 @@ from time import sleep
 import signal
 import sys
 import atexit
+import time
 
 
 global sleep_duration
@@ -19,21 +20,20 @@ do_print = True
 # Initialize mouse controller
 mouse_controller = Controller()
 
+
 class MonitorManager:
     def __init__(self):
         self.pid_file = "/tmp/monitor_manager.pid"
         self.register_signal_handlers()
         self.startup_pid_check()
-        self.config = None
-        self.read_or_create_config()
-        self.pick_monitors()
-        self.set_additional_properties()
-        self.get_and_set_monitor_info()
-        self.set_monitor_position()
-        self.prev_y = None
-        self.do_jump = True
-        self.mouse_controller = Controller()
-        self.set_mousespeed()
+        self.available_monitors = self.fetch_available_monitors()
+        self.config = self.read_config()
+        if self.is_config_valid():
+            print("Using existing configuration.")
+            self.apply_config()
+        else:
+            print("Current setup is not configured. Launching configurator.")
+            self.setup_and_confirm()
         self.run()
 
     def register_signal_handlers(self):
@@ -55,241 +55,365 @@ class MonitorManager:
                 old_pid = int(f.read())
             try:
                 os.kill(old_pid, 0)  # Check if process is running
-                print(f"An instance of the script is already running with PID {old_pid}. Stopping it.")
+                print(
+                    f"An instance of the script is already running with PID {old_pid}. Stopping it."
+                )
                 os.kill(old_pid, signal.SIGTERM)  # Terminate the old process
                 sleep(1)  # Give it some time to terminate
                 # Since there was a running instance, we exit the new instance after killing the old one
-                print("Terminated the old instance. Exiting the new instance to prevent duplicates.")
+                print(
+                    "Terminated the old instance. Exiting the new instance to prevent duplicates."
+                )
                 exit()
             except OSError:
                 print("No running instance found. Starting a new one.")
         else:
             print("No existing PID file found. Starting a new instance.")
-        
+
         with open(self.pid_file, "w") as f:
             f.write(str(os.getpid()))
 
-
     def set_mousespeed(self):
         if self.config.get("mousespeed_factor") != "1.0":
-            print(f"Setting mousespeed factor to {self.config.get('mousespeed_factor')}")
-            subprocess.run(['xinput', '--set-prop', self.config.get("mouse_id"), self.config.get("coordinate_transformation_matrix_id"), self.config.get("mousespeed_factor"), '0', '0', '0', self.config.get("mousespeed_factor"), '0', '0', '0', '1'])
-
-    def pick_monitors(self):
-        available_monitors = self.fetch_available_monitors()
-        self.bottom_monitor = next(
-            (monitor for monitor in self.config['bottom_monitors'] if monitor['name'] in available_monitors), None)
-        self.top_monitor = next(
-            (monitor for monitor in self.config['top_monitors'] if monitor['name'] in available_monitors), None)
-
-        if self.bottom_monitor is None or self.top_monitor is None:
-            print("Error: No suitable monitors found.")
-            exit(1)
+            print(
+                f"Setting mousespeed factor to {self.config.get('mousespeed_factor')}"
+            )
+            subprocess.run(
+                [
+                    "xinput",
+                    "--set-prop",
+                    self.config.get("mouse_id"),
+                    self.config.get("coordinate_transformation_matrix_id"),
+                    self.config.get("mousespeed_factor"),
+                    "0",
+                    "0",
+                    "0",
+                    self.config.get("mousespeed_factor"),
+                    "0",
+                    "0",
+                    "0",
+                    "1",
+                ]
+            )
 
     def fetch_available_monitors(self):
         try:
-            command_output = subprocess.check_output(
-                ['xrandr', '--query'], text=True)
-            monitor_lines = [line.split()[0] for line in command_output.splitlines(
-            ) if "connected" in line and not "disconnected" in line]
-            return monitor_lines
+            command_output = subprocess.check_output(["xrandr", "--query"], text=True)
+            monitor_info = []
+            pattern = r"(\S+) connected(?: primary)? (\d+x\d+\+\d+\+\d+)(?: \(.*?\))? (\d+mm x \d+mm)"
+            for line in command_output.splitlines():
+                match = re.search(pattern, line)
+                if match:
+                    name, geometry, dimensions = match.groups()
+                    resolution, offset = geometry.split("+", 1)
+                    width, height = resolution.split("x")
+                    x_offset, y_offset = offset.split("+")
+                    width_mm, height_mm = dimensions.split(" x ")
+                    monitor_info.append(
+                        {
+                            "name": name,
+                            "resolution": resolution,
+                            "width": int(width),
+                            "height": int(height),
+                            "x_offset": int(x_offset),
+                            "y_offset": int(y_offset),
+                            "width_mm": int(width_mm[:-2]),
+                            "height_mm": int(height_mm[:-2]),
+                            "primary": "primary" in line,
+                        }
+                    )
+            return monitor_info
         except Exception as e:
             print(f"Error: Could not fetch available monitors. Exception: {e}")
-
             exit(1)
 
+    def setup_monitors(self):
+        print("Available Monitors:")
+        for i, monitor in enumerate(self.available_monitors):
+            print(
+                f"{i + 1}. {monitor['name']} - Resolution: {monitor['resolution']}, "
+                f"Offset: +{monitor['x_offset']}+{monitor['y_offset']}, "
+                f"Dimension: {monitor['width_mm']}mm x {monitor['height_mm']}mm"
+                f"{' (Primary)' if monitor['primary'] else ''}"
+            )
+
+        choice = input("Choose setup method: (A) Automatic / (M) Manual: ").upper()
+
+        if choice == "A":
+            self.automatic_setup()
+        elif choice == "M":
+            self.manual_setup()
+        else:
+            print("Invalid choice. Exiting.")
+            exit(1)
+
+    def automatic_setup(self):
+        # Sort monitors by vertical position
+        sorted_monitors = sorted(self.available_monitors, key=lambda m: m["y_offset"])
+
+        self.top_monitor = sorted_monitors[0]
+        self.bottom_monitor = sorted_monitors[-1]
+
+        print(f"Automatically assigned:")
+        print(
+            f"Top monitor: {self.top_monitor['name']} - "
+            f"Resolution: {self.top_monitor['resolution']}, "
+            f"Offset: +{self.top_monitor['x_offset']}+{self.top_monitor['y_offset']}, "
+            f"Width: {self.top_monitor['width_mm']}mm"
+        )
+        print(
+            f"Bottom monitor: {self.bottom_monitor['name']} - "
+            f"Resolution: {self.bottom_monitor['resolution']}, "
+            f"Offset: +{self.bottom_monitor['x_offset']}+{self.bottom_monitor['y_offset']}, "
+            f"Width: {self.bottom_monitor['width_mm']}mm"
+        )
+
+        confirm = input("Is this correct? (Y/N): ").upper()
+        if confirm != "Y":
+            print("Switching to manual setup.")
+            self.manual_setup()
+
+    def manual_setup(self):
+        top_index = int(input("Select the index of your top monitor: ")) - 1
+        bottom_index = int(input("Select the index of your bottom monitor: ")) - 1
+
+        self.top_monitor = self.available_monitors[top_index]
+        self.bottom_monitor = self.available_monitors[bottom_index]
+
     def set_additional_properties(self):
-        self.bottom_width_cm = float(self.bottom_monitor.get('width_cm', 34.4))
-        self.top_width_cm = float(self.top_monitor.get('width_cm', 62.2))
-        self.safety_region = int(self.config.get("safety_region", 200))
+        self.bottom_width_cm = self.bottom_monitor["width_mm"] / 10
+        self.top_width_cm = self.top_monitor["width_mm"] / 10
 
     def get_and_set_monitor_info(self):
-        self.bottom_width, self.bottom_height, self.bottom_x_offset, self.bottom_y_offset = self.get_monitor_info(
-            self.bottom_monitor['name'])
-        self.top_width, self.top_height, self.top_x_offset, self.top_y_offset = self.get_monitor_info(
-            self.top_monitor['name'])
+        (
+            self.bottom_width,
+            self.bottom_height,
+            self.bottom_x_offset,
+            self.bottom_y_offset,
+        ) = self.get_monitor_info(self.bottom_monitor["name"])
+        self.top_width, self.top_height, self.top_x_offset, self.top_y_offset = (
+            self.get_monitor_info(self.top_monitor["name"])
+        )
 
-    # Changed function
-    def assign_available_monitors(self):
-        available_monitors = self.fetch_available_monitors()
-        self.bottom_monitor = next(
-            (monitor for monitor in self.config['bottom_monitors'] if monitor['name'] in available_monitors), None)
-        self.top_monitor = next(
-            (monitor for monitor in self.config['top_monitors'] if monitor['name'] in available_monitors), None)
-
-    def read_or_create_config(self):
+    def read_config(self):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         configfile = os.path.join(script_dir, "config.json")
-        config_changed = False
-
-        def is_config_complete(config):
-            if not config.get('bottom_monitors') or not config.get('top_monitors'):
-                return False
-            for monitor in config['bottom_monitors']:
-                if 'width_cm' not in monitor or 'mouse_height_px' not in monitor:
-                    return False
-            for monitor in config['top_monitors']:
-                if 'width_cm' not in monitor:
-                    return False
-            if 'safety_region' not in config:
-                return False
-            if 'mousespeed_factor' not in config:
-                return False
-            if config.get("mousespeed_factor") != "1.0":
-                if "mouse_id" not in config or "coordinate_transformation_matrix_id" not in config:
-                    return False
-            return True
-
-        available_monitors = self.fetch_available_monitors()
-        available_bottom_monitor = None
-        available_top_monitor = None
-
         if os.path.exists(configfile):
             with open(configfile, "r") as f:
-                self.config = json.load(f)
+                config = json.load(f)
+            print(f"Config read from {configfile}: {config}")
+            return config
+        return None
 
-            # Check for available bottom and top monitors
-            available_bottom_monitor = next(
-                (monitor for monitor in self.config.get('bottom_monitors', []) if monitor['name'] in available_monitors), None)
-            available_top_monitor = next(
-                (monitor for monitor in self.config.get('top_monitors', []) if monitor['name'] in available_monitors), None)
-
-            if available_bottom_monitor:
-                print("Configured Bottom monitor found.")
-            else:
-                print("No configured bottom monitor found.")
-
-            if available_top_monitor:
-                print("Configured Top monitor found.")
-            else:
-                print("No configured top monitor found.")
-
-            if is_config_complete(self.config) and available_bottom_monitor and available_top_monitor:
-                print(f"Config read from {configfile}: {self.config}")
-                self.bottom_monitor = available_bottom_monitor
-                self.top_monitor = available_top_monitor
-                self.mouse_height = int(available_bottom_monitor.get('mouse_height_px', 0))
-                return
-            else:
-                print("Config file is incomplete. Starting remaining configuration...")
-
-        else:
-            print("No existing config file found. Creating new config...")
-            self.config = {'bottom_monitors': [], 'top_monitors': []}
-            config_changed = True
-
-        print("Available Monitors:")
-        for i, monitor in enumerate(available_monitors):
-            print(f"{i + 1}. {monitor}")
-
-        if not available_bottom_monitor:
-            bottom_monitor_index = input("Select the index of your bottom monitor from the list above: ")
-            selected_bottom_monitor = {
-                'name': available_monitors[int(bottom_monitor_index) - 1],
-                'width_cm': input(f"Enter the width in cm of {available_monitors[int(bottom_monitor_index) - 1]}: "),
-                'mouse_height_px': input(f"Enter mouse height in pixels for {available_monitors[int(bottom_monitor_index) - 1]} (default: 30): ") or "30"
-            }
-            self.config["bottom_monitors"].append(selected_bottom_monitor)
-            config_changed = True
-
-        if not available_top_monitor:
-            top_monitor_index = input("Select the index of your top monitor from the list above: ")
-            selected_top_monitor = {
-                'name': available_monitors[int(top_monitor_index) - 1],
-                'width_cm': input(f"Enter the width in cm of {available_monitors[int(top_monitor_index) - 1]}: ")
-            }
-            self.config["top_monitors"].append(selected_top_monitor)
-            config_changed = True
-
-        if "safety_region" not in self.config:
-            self.config["safety_region"] = input("Enter the safety region in pixels (default: 200): ") or "200"
-            config_changed = True
-
-        if "mousespeed_factor" not in self.config:
-            self.config["mousespeed_factor"] = input("Mousespeed factor to enable more than Ubuntus 100% (default: 1.0): ") or "1.0"
-            config_changed = True
-        
-        if self.config.get("mousespeed_factor") != "1.0":
-            def find_matrix_id(device_id):
-                stream = os.popen(f'xinput list-props {device_id}')
-                output = stream.read()
-                
-                for line in output.split('\n'):
-                    if "Coordinate Transformation Matrix" in line:
-                        parts = line.split()
-                        for part in parts:
-                            if '(' in part and ')' in part:
-                                return part.split('(')[1].split(')')[0]
-                return None
-            if "mouse_id" not in self.config or "coordinate_transformation_matrix_id" not in self.config:
-                print("Select the number of the mouse you want to use:")
-                subprocess.run(['xinput', '--list'], text=True)
-                self.config["mouse_id"] = input("Enter the mouse id: ")
-                self.config["coordinate_transformation_matrix_id"] = find_matrix_id(self.config["mouse_id"])
-                print(f"Mouse id: {self.config['mouse_id']}, Coordinate Transformation Matrix id: {self.config['coordinate_transformation_matrix_id']}")
-                config_changed = True
-
-        if config_changed:
-            with open(configfile, "w") as f:
-                json.dump(self.config, f)
-            print(f"New config created: {self.config}")
-
-        self.bottom_monitor = next(
-            (monitor for monitor in self.config['bottom_monitors'] if monitor['name'] in available_monitors), None)
-        self.top_monitor = next(
-            (monitor for monitor in self.config['top_monitors'] if monitor['name'] in available_monitors), None)
-        self.mouse_height = int(self.bottom_monitor.get('mouse_height_px', 0))
+    def create_config(self):
+        self.config = {
+            "monitors": self.available_monitors,
+            "top_monitor": self.top_monitor["name"],
+            "bottom_monitor": self.bottom_monitor["name"],
+            "safety_region": input("Enter safety region in pixels (default 200): ")
+            or "200",
+            "mousespeed_factor": input("Enter mouse speed factor (default 1.0): ")
+            or "1.0",
+            "mouse_height": input("Enter mouse height in pixels (default 30): ")
+            or "30",
+        }
+        self.safety_region = int(self.config["safety_region"])
+        self.mousespeed_factor = float(self.config["mousespeed_factor"])
+        self.mouse_height = int(self.config["mouse_height"])
 
     def get_monitor_info(self, monitor_name):
         """Fetch the monitor details using xrandr and return them."""
         try:
-            command_output = subprocess.check_output(['xrandr', '--query'], text=True)
-            monitor_line = [line for line in command_output.splitlines() if monitor_name in line and "connected" in line][0]
-            resolution_info = re.search(r'(\d+)x(\d+)\+(\d+)\+(\d+)', monitor_line).groups()
+            command_output = subprocess.check_output(["xrandr", "--query"], text=True)
+            monitor_line = [
+                line
+                for line in command_output.splitlines()
+                if monitor_name in line and "connected" in line
+            ][0]
+            resolution_info = re.search(
+                r"(\d+)x(\d+)\+(\d+)\+(\d+)", monitor_line
+            ).groups()
             return tuple(map(int, resolution_info))
         except Exception as e:
-            print(f"Error: Could not find resolution info for {monitor_name}. Exception: {e}")
+            print(
+                f"Error: Could not find resolution info for {monitor_name}. Exception: {e}"
+            )
             exit(1)
 
     def set_monitor_position(self):
         """Set the monitor position using xrandr."""
-        new_bottom_x_offset = (self.top_width - self.bottom_width) // 2 + self.top_x_offset
-        new_bottom_y_offset = self.top_height + self.mouse_height
-        print(f"Setting {self.bottom_monitor['name']} position to {new_bottom_x_offset}x{new_bottom_y_offset}")
-        subprocess.run(['xrandr', '--output', self.bottom_monitor['name'], '--pos', f"{new_bottom_x_offset}x{new_bottom_y_offset}"])
+        new_bottom_x_offset = max(
+            0, (self.top_width - self.bottom_width) // 2 + self.top_x_offset
+        )
+        new_bottom_y_offset = max(0, self.top_height + self.mouse_height)
 
+        # Check if the new position is different from the current position
+        if (
+            new_bottom_x_offset != self.bottom_x_offset
+            or new_bottom_y_offset != self.bottom_y_offset
+        ):
+            print(
+                f"Setting {self.bottom_monitor['name']} position to {new_bottom_x_offset}x{new_bottom_y_offset}"
+            )
+            try:
+                subprocess.run(
+                    [
+                        "xrandr",
+                        "--output",
+                        self.bottom_monitor["name"],
+                        "--pos",
+                        f"{new_bottom_x_offset}x{new_bottom_y_offset}",
+                    ],
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error setting monitor position: {e}")
+                print("Skipping monitor position adjustment.")
+        else:
+            print(
+                f"Monitor {self.bottom_monitor['name']} is already in the correct position."
+            )
 
     def supervise_mouse_position(self, x, y):
         """Print the mouse position and handle jumps when crossing monitor boundaries."""
         if do_print:
             print(f"\r X: {x}, Y: {y}", end="   ", flush=True)
 
-        if abs(y - self.top_height) >= int(self.config["safety_region"]) or x >= self.top_width:
+        if (
+            abs(y - self.top_height) >= int(self.config["safety_region"])
+            or x >= self.top_width
+        ):
             return
 
         if self.do_jump and self.prev_y is not None:
-            if (y >= self.top_height and self.prev_y < self.top_height) or (y < self.top_height and self.prev_y >= self.top_height):
-                direction = 'down' if y >= self.top_height else 'up'
+            if (y >= self.top_height and self.prev_y < self.top_height) or (
+                y < self.top_height and self.prev_y >= self.top_height
+            ):
+                direction = "down" if y >= self.top_height else "up"
                 new_x = self.handle_jump(x, direction)
                 self.mouse_controller.position = (new_x, y)
                 print(f"jumped {direction}".upper())
 
         self.prev_y = y
+
     def handle_jump(self, old_x, direction):
         top_dpi = self.top_width / self.top_width_cm
         bottom_dpi = self.bottom_width / self.bottom_width_cm
         top_mid = self.top_width // 2
         bottom_x_offset = top_mid - (self.bottom_width // 2)
         bottom_mid = (self.bottom_width // 2) + bottom_x_offset
-        offset = old_x - (top_mid if direction == 'up' else bottom_mid)
-        scaling_factor = bottom_dpi / top_dpi if direction == 'down' else top_dpi / bottom_dpi
+        offset = old_x - (top_mid if direction == "up" else bottom_mid)
+        scaling_factor = (
+            bottom_dpi / top_dpi if direction == "down" else top_dpi / bottom_dpi
+        )
         new_offset = offset * scaling_factor
-        new_x = (bottom_mid if direction == 'down' else top_mid) + new_offset
+        new_x = (bottom_mid if direction == "down" else top_mid) + new_offset
         return new_x
 
+    def setup_and_confirm(self):
+        while True:
+            self.setup_monitors()
+            self.create_config()
+            self.set_additional_properties()
+            self.get_and_set_monitor_info()
+            self.set_monitor_position()
+            self.prev_y = None
+            self.do_jump = True
+            self.mouse_controller = Controller()
+            self.set_mousespeed()
+
+            print("Testing setup for 10 seconds...")
+            start_time = time.time()
+            with Listener(on_move=self.on_move) as listener:
+                while time.time() - start_time < 10:
+                    time.sleep(0.1)
+                    if not listener.running:
+                        break
+
+            confirm = input("Is this setup correct? (Y/N): ").upper()
+            if confirm == "Y":
+                print("Setup confirmed. Saving configuration.")
+                self.save_config()
+                break
+            else:
+                print("Restarting setup process...")
+                self.config = None  # Reset config to force new setup
+
+    def on_move(self, x, y):
+        self.supervise_mouse_position(x, y)
+
+    def save_config(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        configfile = os.path.join(script_dir, "config.json")
+        with open(configfile, "w") as f:
+            json.dump(self.config, f, indent=2)
+        print(f"Configuration saved to {configfile}")
+
+    def get_mouse_position(self):
+        try:
+            output = subprocess.check_output(["xdotool", "getmouselocation"]).decode()
+            x, y = map(int, output.split()[:2])
+            return x, y
+        except Exception as e:
+            print(f"Error getting mouse position: {e}")
+            return 0, 0
+
     def run(self):
-        with Listener(on_move=self.supervise_mouse_position) as listener:
+        with Listener(on_move=self.on_move) as listener:
             listener.join()
+
+    def is_config_valid(self):
+        if not self.config:
+            return False
+
+        config_monitors = self.config.get("monitors", [])
+        if len(config_monitors) != len(self.available_monitors):
+            return False
+
+        for config_monitor in config_monitors:
+            matching_monitor = next(
+                (
+                    m
+                    for m in self.available_monitors
+                    if m["name"] == config_monitor["name"]
+                ),
+                None,
+            )
+            if not matching_monitor:
+                return False
+            if (
+                config_monitor["resolution"]
+                != f"{matching_monitor['width']}x{matching_monitor['height']}"
+                or config_monitor["x_offset"] != matching_monitor["x_offset"]
+                or config_monitor["y_offset"] != matching_monitor["y_offset"]
+                or config_monitor["width_mm"] != matching_monitor["width_mm"]
+                or config_monitor["height_mm"] != matching_monitor["height_mm"]
+            ):
+                return False
+
+        return True
+
+    def apply_config(self):
+        self.bottom_monitor = next(
+            m
+            for m in self.config["monitors"]
+            if m["name"] == self.config["bottom_monitor"]
+        )
+        self.top_monitor = next(
+            m
+            for m in self.config["monitors"]
+            if m["name"] == self.config["top_monitor"]
+        )
+        self.safety_region = int(self.config["safety_region"])
+        self.mousespeed_factor = float(self.config["mousespeed_factor"])
+        self.mouse_height = int(self.config["mouse_height"])
+        self.set_additional_properties()
+        self.get_and_set_monitor_info()
+        self.set_monitor_position()
+        self.prev_y = None
+        self.do_jump = True
+        self.mouse_controller = Controller()
+        self.set_mousespeed()
 
 
 if __name__ == "__main__":

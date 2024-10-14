@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import time
 
 
 def install_service():
@@ -14,9 +15,16 @@ After=graphical.target
 
 [Service]
 ExecStart=/usr/bin/python3 {monitor_mapper_path}
-Restart=always
+Restart=on-failure
+RestartSec=5
 User={os.getlogin()}
 Environment=DISPLAY=:0
+StandardOutput=journal
+StandardError=journal
+# Add these lines for better logging
+WorkingDirectory={os.path.dirname(monitor_mapper_path)}
+ExecStartPre=/bin/sh -c 'echo "Starting Monitor Mouse Mapper at $(date)" >> /tmp/monitor_mouse_mapper.log'
+ExecStopPost=/bin/sh -c 'echo "Stopped Monitor Mouse Mapper at $(date)" >> /tmp/monitor_mouse_mapper.log'
 
 [Install]
 WantedBy=graphical.target
@@ -43,8 +51,31 @@ WantedBy=graphical.target
         print(
             "You can check its status with: sudo systemctl status monitor-mouse-mapper.service"
         )
+        print(
+            "For more detailed logs, check: sudo journalctl -u monitor-mouse-mapper.service"
+        )
+        print("Additional logs can be found in: /tmp/monitor_mouse_mapper.log")
+
+        # Add a small delay before checking the status
+        time.sleep(2)
+
+        subprocess.run(
+            ["sudo", "systemctl", "status", "monitor-mouse-mapper.service"], check=True
+        )
     except subprocess.CalledProcessError as e:
-        print(f"Error installing service: {e}")
+        print(f"Error installing or starting service: {e}")
+        print("Checking service logs...")
+        subprocess.run(
+            [
+                "sudo",
+                "journalctl",
+                "-u",
+                "monitor-mouse-mapper.service",
+                "--no-pager",
+                "-n",
+                "20",
+            ]
+        )
     except Exception as e:
         print(f"Unexpected error: {e}")
 

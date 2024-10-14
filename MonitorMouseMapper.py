@@ -100,25 +100,22 @@ class MonitorManager:
         try:
             command_output = subprocess.check_output(["xrandr", "--query"], text=True)
             monitor_info = []
-            pattern = r"(\S+) connected(?: primary)? (\d+x\d+\+\d+\+\d+)(?: \(.*?\))? (\d+mm x \d+mm)"
+            pattern = r"(\S+) connected(?: primary)? (\d+)x(\d+)\+(\d+)\+(\d+)(?: \(.*?\))? (\d+)mm x (\d+)mm"
             for line in command_output.splitlines():
                 match = re.search(pattern, line)
                 if match:
-                    name, geometry, dimensions = match.groups()
-                    resolution, offset = geometry.split("+", 1)
-                    width, height = resolution.split("x")
-                    x_offset, y_offset = offset.split("+")
-                    width_mm, height_mm = dimensions.split(" x ")
+                    name, width, height, x_offset, y_offset, width_mm, height_mm = (
+                        match.groups()
+                    )
                     monitor_info.append(
                         {
                             "name": name,
-                            "resolution": resolution,
                             "width": int(width),
                             "height": int(height),
                             "x_offset": int(x_offset),
                             "y_offset": int(y_offset),
-                            "width_mm": int(width_mm[:-2]),
-                            "height_mm": int(height_mm[:-2]),
+                            "width_mm": int(width_mm),
+                            "height_mm": int(height_mm),
                             "primary": "primary" in line,
                         }
                     )
@@ -131,7 +128,7 @@ class MonitorManager:
         print("Available Monitors:")
         for i, monitor in enumerate(self.available_monitors):
             print(
-                f"{i + 1}. {monitor['name']} - Resolution: {monitor['resolution']}, "
+                f"{i + 1}. {monitor['name']} - Resolution: {monitor['width']}x{monitor['height']}, "
                 f"Offset: +{monitor['x_offset']}+{monitor['y_offset']}, "
                 f"Dimension: {monitor['width_mm']}mm x {monitor['height_mm']}mm"
                 f"{' (Primary)' if monitor['primary'] else ''}"
@@ -157,13 +154,13 @@ class MonitorManager:
         print(f"Automatically assigned:")
         print(
             f"Top monitor: {self.top_monitor['name']} - "
-            f"Resolution: {self.top_monitor['resolution']}, "
+            f"Resolution: {self.top_monitor['width']}x{self.top_monitor['height']}, "
             f"Offset: +{self.top_monitor['x_offset']}+{self.top_monitor['y_offset']}, "
             f"Width: {self.top_monitor['width_mm']}mm"
         )
         print(
             f"Bottom monitor: {self.bottom_monitor['name']} - "
-            f"Resolution: {self.bottom_monitor['resolution']}, "
+            f"Resolution: {self.bottom_monitor['width']}x{self.bottom_monitor['height']}, "
             f"Offset: +{self.bottom_monitor['x_offset']}+{self.bottom_monitor['y_offset']}, "
             f"Width: {self.bottom_monitor['width_mm']}mm"
         )
@@ -199,10 +196,13 @@ class MonitorManager:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         configfile = os.path.join(script_dir, "config.json")
         if os.path.exists(configfile):
-            with open(configfile, "r") as f:
-                config = json.load(f)
-            print(f"Config read from {configfile}: {config}")
-            return config
+            try:
+                with open(configfile, "r") as f:
+                    config = json.load(f)
+                print(f"Config read from {configfile}: {config}")
+                return config
+            except json.JSONDecodeError:
+                print("Error reading config file. Creating a new one.")
         return None
 
     def create_config(self):
@@ -245,7 +245,7 @@ class MonitorManager:
         new_bottom_x_offset = max(
             0, (self.top_width - self.bottom_width) // 2 + self.top_x_offset
         )
-        new_bottom_y_offset = max(0, self.top_height + self.mouse_height)
+        new_bottom_y_offset = self.top_height + self.mouse_height
 
         # Check if the new position is different from the current position
         if (
@@ -266,6 +266,14 @@ class MonitorManager:
                     ],
                     check=True,
                 )
+                # Update the config with the new position
+                for monitor in self.config["monitors"]:
+                    if monitor["name"] == self.bottom_monitor["name"]:
+                        monitor["x_offset"] = new_bottom_x_offset
+                        monitor["y_offset"] = (
+                            new_bottom_y_offset - self.mouse_height
+                        )  # Store the original y_offset
+                self.save_config()  # Save the updated config
             except subprocess.CalledProcessError as e:
                 print(f"Error setting monitor position: {e}")
                 print("Skipping monitor position adjustment.")
@@ -365,11 +373,17 @@ class MonitorManager:
 
     def is_config_valid(self):
         if not self.config:
+            print("No config found.")
             return False
 
         config_monitors = self.config.get("monitors", [])
         if len(config_monitors) != len(self.available_monitors):
+            print(
+                f"Number of monitors mismatch. Config: {len(config_monitors)}, Available: {len(self.available_monitors)}"
+            )
             return False
+
+        mouse_height = int(self.config.get("mouse_height", 0))
 
         for config_monitor in config_monitors:
             matching_monitor = next(
@@ -381,17 +395,28 @@ class MonitorManager:
                 None,
             )
             if not matching_monitor:
-                return False
-            if (
-                config_monitor["resolution"]
-                != f"{matching_monitor['width']}x{matching_monitor['height']}"
-                or config_monitor["x_offset"] != matching_monitor["x_offset"]
-                or config_monitor["y_offset"] != matching_monitor["y_offset"]
-                or config_monitor["width_mm"] != matching_monitor["width_mm"]
-                or config_monitor["height_mm"] != matching_monitor["height_mm"]
-            ):
+                print(f"No matching monitor found for {config_monitor['name']}")
                 return False
 
+            for key in ["width", "height", "x_offset", "width_mm", "height_mm"]:
+                if config_monitor[key] != matching_monitor[key]:
+                    print(
+                        f"Mismatch in {key} for {config_monitor['name']}. Config: {config_monitor[key]}, Available: {matching_monitor[key]}"
+                    )
+                    return False
+
+            # Special check for y_offset
+            if (
+                config_monitor["y_offset"] != matching_monitor["y_offset"]
+                and config_monitor["y_offset"]
+                != matching_monitor["y_offset"] - mouse_height
+            ):
+                print(
+                    f"Y-offset mismatch for {config_monitor['name']}. Config: {config_monitor['y_offset']}, Available: {matching_monitor['y_offset']}, With mouse height: {matching_monitor['y_offset'] - mouse_height}"
+                )
+                return False
+
+        print("Configuration is valid.")
         return True
 
     def apply_config(self):
@@ -417,7 +442,9 @@ class MonitorManager:
         self.set_mousespeed()
 
     def prompt_service_installation(self):
-        install_service = input("Do you want to install this script as a system service? (Y/N): ").upper()
+        install_service = input(
+            "Do you want to install this script as a system service? (Y/N): "
+        ).upper()
         if install_service == "Y":
             script_dir = os.path.dirname(os.path.abspath(__file__))
             install_script = os.path.join(script_dir, "install_service.py")

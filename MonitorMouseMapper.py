@@ -25,17 +25,10 @@ class MonitorManager:
         self.setup_logging()
         self.pid_file = os.path.join(self.script_dir, "monitor_manager.pid")
         self.config_file = os.path.join(self.script_dir, "config.json")
+        self.config_flag_file = os.path.join(self.script_dir, "config_complete.flag")
         self.register_signal_handlers()
         self.startup_pid_check()
-        self.available_monitors = self.fetch_available_monitors()
-        self.config = self.read_config()
-        if self.is_config_valid():
-            self.logger.info("Using existing configuration.")
-            self.apply_config()
-        else:
-            self.logger.info("Current setup is not configured. Launching configurator.")
-            self.launch_configurator()
-        self.run()
+        self.load_and_apply_config()
 
     def setup_logging(self):
         log_file = os.path.join(self.script_dir, "monitor_mouse_mapper.log")
@@ -152,19 +145,23 @@ class MonitorManager:
         self.logger.info("Launching configurator.")
         configurator_path = os.path.join(self.script_dir, "ConfiguratorTool.py")
         try:
-            subprocess.run(
-                ["x-terminal-emulator", "-e", f"python3 {configurator_path}"],
-                check=True,
+            subprocess.Popen(
+                ["x-terminal-emulator", "-e", f"python3 {configurator_path}"]
             )
-            self.logger.info("Configurator completed. Restarting service.")
-            os.execv(sys.executable, ["python3"] + sys.argv)
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to launch configurator: {e}")
             sys.exit(1)
 
+    def wait_for_config(self):
+        self.logger.info("Waiting for configuration to complete...")
+        while not os.path.exists(self.config_flag_file):
+            sleep(1)
+        os.remove(self.config_flag_file)
+        self.logger.info("Configuration completed.")
+
     def set_additional_properties(self):
-        # Implement any additional property setting logic here
-        pass
+        self.top_width_mm = self.top_monitor["width_mm"]
+        self.bottom_width_mm = self.bottom_monitor["width_mm"]
 
     def get_and_set_monitor_info(self):
         (
@@ -225,25 +222,40 @@ class MonitorManager:
             )
 
     def supervise_mouse_position(self, x, y):
+        """Print the mouse position and handle jumps when crossing monitor boundaries."""
         if do_print:
             print(f"\r X: {x}, Y: {y}", end="   ", flush=True)
 
-        if self.bottom_y_offset <= y < self.bottom_y_offset + self.safety_region:
-            if self.prev_y is not None and self.prev_y < self.bottom_y_offset:
-                new_y = self.top_y_offset + self.top_height - self.safety_region
-                self.mouse_controller.position = (x, new_y)
-        elif (
-            self.top_y_offset + self.top_height - self.safety_region
-            <= y
-            < self.top_y_offset + self.top_height
+        if (
+            abs(y - self.top_height) >= int(self.config["safety_region"])
+            or x >= self.top_width
         ):
-            if (
-                self.prev_y is not None
-                and self.prev_y >= self.top_y_offset + self.top_height
+            return
+
+        if self.do_jump and self.prev_y is not None:
+            if (y >= self.top_height and self.prev_y < self.top_height) or (
+                y < self.top_height and self.prev_y >= self.top_height
             ):
-                new_y = self.bottom_y_offset + self.safety_region
-                self.mouse_controller.position = (x, new_y)
+                direction = "down" if y >= self.top_height else "up"
+                new_x = self.handle_jump(x, direction)
+                self.mouse_controller.position = (new_x, y)
+                print(f"jumped {direction}".upper())
+
         self.prev_y = y
+
+    def handle_jump(self, old_x, direction):
+        top_dpi = self.top_width / self.top_width_mm
+        bottom_dpi = self.bottom_width / self.bottom_width_mm
+        top_mid = self.top_width // 2
+        bottom_x_offset = top_mid - (self.bottom_width // 2)
+        bottom_mid = (self.bottom_width // 2) + bottom_x_offset
+        offset = old_x - (top_mid if direction == "up" else bottom_mid)
+        scaling_factor = (
+            bottom_dpi / top_dpi if direction == "down" else top_dpi / bottom_dpi
+        )
+        new_offset = offset * scaling_factor
+        new_x = (bottom_mid if direction == "down" else top_mid) + new_offset
+        return new_x
 
     def on_move(self, x, y):
         self.supervise_mouse_position(x, y)
@@ -260,6 +272,19 @@ class MonitorManager:
         with open(self.config_file, "w") as f:
             json.dump(self.config, f, indent=2)
         self.logger.info(f"Configuration saved to {self.config_file}")
+
+    def load_and_apply_config(self):
+        self.available_monitors = self.fetch_available_monitors()
+        self.config = self.read_config()
+        if self.is_config_valid():
+            self.logger.info("Using existing configuration.")
+            self.apply_config()
+            self.run()
+        else:
+            self.logger.info("Current setup is not configured. Launching configurator.")
+            self.launch_configurator()
+            self.wait_for_config()
+            self.load_and_apply_config()
 
 
 if __name__ == "__main__":

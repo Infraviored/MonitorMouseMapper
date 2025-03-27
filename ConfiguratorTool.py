@@ -10,6 +10,7 @@ class ConfiguratorTool:
     def __init__(self):
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_file = os.path.join(self.script_dir, "config.json")
+        self.config_flag_file = os.path.join(self.script_dir, "config_complete.flag")
         self.config = self.load_existing_config() or {}
         self.available_monitors = self.fetch_available_monitors()
 
@@ -103,13 +104,17 @@ class ConfiguratorTool:
             json.dump(self.config, f, indent=2)
         print(f"Configuration saved to {self.config_file}")
 
+        # Create the config complete flag file
+        with open(self.config_flag_file, "w") as f:
+            f.write("Configuration complete")
+
     def run(self):
         print("Monitor Mouse Mapper Configurator")
         self.setup_monitors()
         self.create_config()
         self.save_config()
         print(
-            "Configuration complete. You can now start the Monitor Mouse Mapper service."
+            "Configuration complete. The Monitor Mouse Mapper service will now apply the new configuration."
         )
 
 

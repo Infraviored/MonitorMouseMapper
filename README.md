@@ -1,4 +1,3 @@
-
 # MonitorMouseMapper
 ![Monitor Setup](images/full_setup_hills.png)
 ## Introduction
@@ -17,6 +16,28 @@ The core functionality of **MonitorMouseMapper** is to handle DPI scaling issues
 - 🔄 **Dynamic Reconfiguration**: Automatically adapts when you connect or disconnect monitors.
 
 ## Installation
+
+### For Ubuntu 24.04 and newer
+
+Ubuntu 24.04 and newer versions enforce PEP 668, which restricts direct pip installations. Use our installer script which automatically sets up a virtual environment:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/MonitorMouseMapper.git
+cd MonitorMouseMapper
+
+# Run the installer script
+./install_service.py
+```
+
+The script will:
+1. Create a Python virtual environment
+2. Install required dependencies inside the environment
+3. Set up a systemd user service to run at startup
+4. Configure your display settings
+5. Optionally create a desktop shortcut for easy configuration
+
+### For older Ubuntu versions
 
 1. Clone the repository: 
     ```bash

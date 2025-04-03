@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import re
+import time
 
 
 class ConfiguratorTool:
@@ -107,17 +108,46 @@ class ConfiguratorTool:
         # Create the config complete flag file
         with open(self.config_flag_file, "w") as f:
             f.write("Configuration complete")
+    
+    def restart_service(self):
+        print("Restarting Monitor Mouse Mapper service...")
+        try:
+            # Check if service is active
+            result = subprocess.run(
+                ["systemctl", "--user", "is-active", "monitor-mouse-mapper.service"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Restart or start the service
+            if result.stdout.strip() == "active":
+                subprocess.run(["systemctl", "--user", "restart", "monitor-mouse-mapper.service"], check=True)
+                print("Service restarted successfully.")
+            else:
+                subprocess.run(["systemctl", "--user", "start", "monitor-mouse-mapper.service"], check=True)
+                print("Service started successfully.")
+                
+        except subprocess.CalledProcessError as e:
+            print(f"Error restarting service: {e}")
+            print("You may need to manually restart the service with: systemctl --user restart monitor-mouse-mapper.service")
 
     def run(self):
         print("Monitor Mouse Mapper Configurator")
         self.setup_monitors()
         self.create_config()
         self.save_config()
-        print(
-            "Configuration complete. The Monitor Mouse Mapper service will now apply the new configuration."
-        )
+        
+        # Ask if user wants to restart the service
+        restart = input("Would you like to restart the Monitor Mouse Mapper service? (Y/N): ").upper()
+        if restart == "Y":
+            self.restart_service()
+        else:
+            print("Configuration complete. You will need to restart the service manually or restart your computer.")
 
 
 if __name__ == "__main__":
     configurator = ConfiguratorTool()
     configurator.run()
+    # Wait for user input before closing the terminal
+    input("\nPress Enter to close this window...")

@@ -14,89 +14,61 @@ The core functionality of **MonitorMouseMapper** is to handle DPI scaling issues
 - 🖱️ **Smart Mouse Positioning**: Ensures your mouse moves smoothly between your top and bottom monitors.
 - ⚙️ **Configuration File**: Customize your experience through a simple JSON config file.
 - 🔄 **Dynamic Reconfiguration**: Automatically adapts when you connect or disconnect monitors.
+- 🚀 **Desktop Integration**: Creates a desktop shortcut and application entry for easy access.
 
-## Installation
+## Important Note
 
-### For Ubuntu 24.04 and newer
+**X11 Session Required**: Monitor Mouse Mapper is designed for X11 and will not work properly on Wayland. Make sure to select "Ubuntu on Xorg" at the login screen.
 
-Ubuntu 24.04 and newer versions enforce PEP 668, which restricts direct pip installations. Use our installer script which automatically sets up a virtual environment:
+## Quick Start Guide
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/MonitorMouseMapper.git
-cd MonitorMouseMapper
+1. **Install the utility**:
+   ```bash
+   # Clone the repository
+   git clone https://github.com/Infraviored/MonitorMouseMapper.git
+   cd MonitorMouseMapper
 
-# Run the installer script
-./install_service.py
-```
+   # Run the installer script
+   python3 install_service.py
+   ```
 
-The script will:
-1. Create a Python virtual environment
-2. Install required dependencies inside the environment
-3. Set up a systemd user service to run at startup
-4. Configure your display settings
-5. Optionally create a desktop shortcut for easy configuration
+2. **Configure your monitors**:
+   - Launch the configurator via the desktop shortcut created during installation
+   - OR open it from your applications menu
+   - OR run it from terminal: `python3 ConfiguratorTool.py`
 
-### For older Ubuntu versions
+3. **Enjoy seamless mouse movement** between your monitors!
 
-1. Clone the repository: 
-    ```bash
-    git clone https://github.com/yourusername/MonitorMouseMapper.git
-    ```
-2. Navigate to the project folder:
-    ```bash
-    cd MonitorMouseMapper
-    ```
-3. Run the script:
-    ```bash
-    python3 MonitorMouseMapper.py
-    ```
+## Installation Details
 
-## How to Use
+The installer script automatically:
+- Creates a Python virtual environment with all required dependencies
+- Sets up a systemd user service to run at startup
+- Creates desktop shortcuts and application entries
+- Validates your monitor configuration
 
-1. **Initial Run**: Upon first launch, you'll be prompted to choose your top and bottom monitors and enter their widths in cm.
-2. **Run and Forget**: Once set up, **MonitorMouseMapper** takes care of everything automatically.
+### Uninstalling
 
-## Example Setup
-
-Imagine you have a smaller, high-DPI laptop monitor centered below a larger, low-DPI external monitor. With **MonitorMouseMapper**, not only will your mouse pointer transition smoothly between these two, but it'll also handle the DPI scaling intelligently.
-
-## Requirements
-
-- Python 3.x
-- `pynput` library
-- `xrandr` utility
-- 🐧 **Ubuntu Support**: Currently, this utility only supports Ubuntu.
-
-## Run at Startup
-
-To run **MonitorMouseMapper** at startup, add the following command to your startup applications:
+To uninstall Monitor Mouse Mapper:
 
 ```bash
-bash -c "sleep 5 && python3 /home/flo/Programs/MonitorMouseMapper/MonitorMouseMapper.py"
+python3 install_service.py --uninstall
 ```
-The delay is necessary to ensure that the script runs after your monitors have been detected. Adjust it to your machine's speed.
 
-## Create desktop shortcut
+## Managing the Service
 
-To create a shortcut, make the create_desktop_shortcut.sh script executable and run it:
+Monitor Mouse Mapper runs as a systemd user service:
 
-```bash
-chmod +x create_desktop_shortcut.sh
-./create_desktop_shortcut.sh
-```
-Choose between hills and tree icons:
-<table>
-  <tr>
-    <td><img src="images/icon_hills.png" width="100%"></td>
-    <td><img src="images/icon_tree.png" width="100%"></td>
-  </tr>
-</table>
+- **Check status**: `systemctl --user status monitor-mouse-mapper.service`
+- **Start**: `systemctl --user start monitor-mouse-mapper.service`
+- **Stop**: `systemctl --user stop monitor-mouse-mapper.service`
+- **View logs**: `journalctl --user -u monitor-mouse-mapper.service -n 50`
 
 ## Troubleshooting
 
-- Make sure `xrandr` is installed and updated.
-- For a clean slate, you can delete the `config.json` file and re-run the script.
+- **X11 vs Wayland**: Make sure you're using X11 (log out and select "Ubuntu on Xorg" at login)
+- **Wrong Monitor Configuration**: Run the configurator tool if your monitor setup has changed
+- **Service Not Starting**: Check logs with `journalctl --user -u monitor-mouse-mapper.service`
 
 ## Contribution
 

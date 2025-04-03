@@ -39,7 +39,7 @@ def create_desktop_shortcut(script_dir, python_venv):
     applications_file_path = os.path.join(applications_dir, "MonitorMouseMapper.desktop")
     
     configurator_path = os.path.join(script_dir, "ConfiguratorTool.py")
-    icon_path = os.path.join(script_dir, "images/icon_hills.png")
+    icon_path = os.path.join(script_dir, "images/logo.png")
     
     # Check if files already exist
     if os.path.exists(desktop_file_path):
@@ -201,6 +201,41 @@ def uninstall_service():
     return True
 
 
+def find_xauth_file():
+    """Find the X authentication file for the current session"""
+    # First check if XAUTHORITY is already set
+    xauthority = os.environ.get('XAUTHORITY')
+    if xauthority and os.path.exists(xauthority):
+        return xauthority
+    
+    # Check session type
+    session_type = os.environ.get('XDG_SESSION_TYPE', '')
+    user_runtime_dir = f"/run/user/{os.getuid()}"
+    
+    # Different patterns to try
+    if session_type == 'wayland':
+        # For Wayland with XWayland
+        patterns = [
+            os.path.join(user_runtime_dir, ".mutter-Xwaylandauth.*"),
+            os.path.join(user_runtime_dir, "xauth_*"),
+        ]
+    else:
+        # For X11
+        patterns = [os.path.join(user_runtime_dir, ".xauth*")]
+    
+    # Always add the default .Xauthority as fallback
+    patterns.append(os.path.expanduser("~/.Xauthority"))
+    
+    # Try each pattern until we find a match
+    for pattern in patterns:
+        matches = glob.glob(pattern)
+        if matches:
+            return matches[0]
+    
+    # If all else fails, return the default location
+    return os.path.expanduser("~/.Xauthority")
+
+
 def install_service():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     monitor_mapper_path = os.path.join(script_dir, "MonitorMouseMapper.py")
@@ -258,12 +293,14 @@ def install_service():
             print(f"Error setting up virtual environment: {e}")
             return
     
-    # Get current DISPLAY value (no need for XAUTHORITY in X11)
+    # Get current DISPLAY and XAUTHORITY values
     display = os.environ.get('DISPLAY', ':0')
+    xauthority = find_xauth_file()
     
     # Check the session type
     session_type = os.environ.get('XDG_SESSION_TYPE', 'unknown')
     print(f"Detected session type: {session_type}")
+    print(f"Using DISPLAY={display} and XAUTHORITY={xauthority}")
     
     service_content = f"""[Unit]
 Description=Monitor Mouse Mapper Service
@@ -277,6 +314,7 @@ ExecStart={python_venv} -u {monitor_mapper_path}
 Restart=on-failure
 RestartSec=5
 Environment=DISPLAY={display}
+Environment=XAUTHORITY={xauthority}
 StandardOutput=journal
 StandardError=journal
 WorkingDirectory={script_dir}
@@ -346,6 +384,8 @@ WantedBy=graphical-session.target
         print("1. Check service status: systemctl --user status monitor-mouse-mapper.service")
         print("2. View service logs: journalctl --user -u monitor-mouse-mapper.service -n 50")
         print("3. Run the configurator: python3 ConfiguratorTool.py")
+        print("\nIf X authentication changes, restart the service with:")
+        print("systemctl --user restart monitor-mouse-mapper.service")
 
     except subprocess.CalledProcessError as e:
         print(f"Error installing or starting service: {e}")

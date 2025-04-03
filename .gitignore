@@ -40,3 +40,4 @@ dist/
 build/
 config.json
 monitor_mouse_mapper.log
+config_complete.flag

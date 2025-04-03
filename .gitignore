@@ -1,0 +1,42 @@
+*.log
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+env/
+*.venv
+
+# IDE-specific files
+.vscode/
+.idea/
+
+# Configuration files
+config.json
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# PID file
+*.pid
+
+# Compiled files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Package files
+*.egg
+*.egg-info/
+dist/
+build/
+config.json
+monitor_mouse_mapper.log

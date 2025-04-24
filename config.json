@@ -2,8 +2,8 @@
   "monitors": [
     {
       "name": "eDP-1",
-      "width": 1920,
-      "height": 1200,
+      "width": 2880,
+      "height": 1800,
       "x_offset": 0,
       "y_offset": 1110,
       "width_mm": 302,
@@ -11,29 +11,30 @@
       "primary": false
     },
     {
-      "name": "DP-3-1",
+      "name": "DP-1-1",
       "width": 1920,
       "height": 1080,
-      "x_offset": 0,
+      "x_offset": 480,
       "y_offset": 0,
       "width_mm": 527,
       "height_mm": 296,
       "primary": true
     },
     {
-      "name": "DP-3-2",
+      "name": "DP-1-3",
       "width": 1920,
       "height": 1080,
-      "x_offset": 1920,
+      "x_offset": 2400,
       "y_offset": 0,
       "width_mm": 527,
       "height_mm": 296,
       "primary": false
     }
   ],
-  "top_monitor": "DP-3-1",
+  "top_monitor": "DP-1-1",
   "bottom_monitor": "eDP-1",
   "safety_region": "200",
   "mousespeed_factor": "1.0",
-  "mouse_height": "30"
+  "mouse_height": "30",
+  "edge_mapping": true
 }

@@ -63,6 +63,7 @@ class ConfiguratorTool:
 
         if choice == "A":
             self.automatic_setup()
+            self.calculate_and_apply_center_offsets()
         elif choice == "M":
             self.manual_setup()
         else:
@@ -86,8 +87,78 @@ class ConfiguratorTool:
         bottom_index = int(input("Select the index of your bottom monitor: ")) - 1
         self.top_monitor = self.available_monitors[top_index]
         self.bottom_monitor = self.available_monitors[bottom_index]
+        self.calculate_and_apply_center_offsets()
+
+    def calculate_and_apply_center_offsets(self):
+        """Calculates and updates monitor x_offsets to center them horizontally relative to each other.
+        The wider monitor's x_offset is set to 0.
+        The narrower monitor's x_offset is set to (wider_width - narrower_width) // 2.
+        """
+        if not hasattr(self, 'top_monitor') or not hasattr(self, 'bottom_monitor'):
+            print("Warning: Top or bottom monitor not selected. Cannot apply centering.")
+            return
+
+        top_mon_orig = self.top_monitor
+        bottom_mon_orig = self.bottom_monitor
+
+        # Store original offsets before modification
+        original_offsets = {m['name']: m['x_offset'] for m in self.available_monitors}
+
+        # Find the dictionaries in the main list to update them directly
+        top_mon_dict = next((m for m in self.available_monitors if m['name'] == top_mon_orig['name']), None)
+        bottom_mon_dict = next((m for m in self.available_monitors if m['name'] == bottom_mon_orig['name']), None)
+
+        if not top_mon_dict or not bottom_mon_dict:
+             print(f"Warning: Could not find top or bottom monitor in available monitors list.")
+             return
+
+        # Determine wider and narrower monitors
+        if top_mon_dict['width'] >= bottom_mon_dict['width']:
+            wider_mon_dict = top_mon_dict
+            narrower_mon_dict = bottom_mon_dict
+        else:
+            wider_mon_dict = bottom_mon_dict
+            narrower_mon_dict = top_mon_dict
+
+        wider_width = wider_mon_dict['width']
+        narrower_width = narrower_mon_dict['width']
+
+        # Calculate the new offset for the narrower monitor
+        narrower_new_x_offset = (wider_width - narrower_width) // 2
+        wider_new_x_offset = 0 # Wider monitor is always at 0 relative offset
+
+        # Apply the new offsets to the top/bottom pair
+        print(f"Applying relative horizontal centering:")
+        print(f" - Wider monitor ({wider_mon_dict['name']}): Original x_offset={original_offsets[wider_mon_dict['name']]}, New x_offset={wider_new_x_offset}")
+        wider_mon_dict['x_offset'] = wider_new_x_offset
+
+        print(f" - Narrower monitor ({narrower_mon_dict['name']}): Original x_offset={original_offsets[narrower_mon_dict['name']]}, New x_offset={narrower_new_x_offset}")
+        narrower_mon_dict['x_offset'] = narrower_new_x_offset
+
+        # --- Adjust other monitors relative to the top monitor's change --- 
+        # Calculate the change in the top monitor's offset
+        original_top_x = original_offsets[top_mon_dict['name']]
+        new_top_x = top_mon_dict['x_offset'] # This is already updated
+        top_offset_delta = new_top_x - original_top_x
+        
+        if top_offset_delta != 0:
+             print(f"Adjusting other monitors relative to top monitor ({top_mon_dict['name']}) offset change ({top_offset_delta:+d}):")
+             for mon_dict in self.available_monitors:
+                 # Skip the top and bottom monitors themselves
+                 if mon_dict['name'] == top_mon_dict['name'] or mon_dict['name'] == bottom_mon_dict['name']:
+                     continue
+                 
+                 original_other_x = original_offsets[mon_dict['name']]
+                 new_other_x = original_other_x + top_offset_delta
+                 print(f" - Monitor ({mon_dict['name']}): Original x_offset={original_other_x}, New x_offset={new_other_x}")
+                 mon_dict['x_offset'] = new_other_x
+        # --- End adjustment --- 
+
+        # Note: The y_offsets are not modified by this function.
+        # This only affects the configuration saved, not the live xrandr setup.
 
     def create_config(self):
+        # This will now use the self.available_monitors list which might have updated x_offsets
         self.config = {
             "monitors": self.available_monitors,
             "top_monitor": self.top_monitor["name"],
@@ -98,6 +169,7 @@ class ConfiguratorTool:
             or "1.0",
             "mouse_height": input("Enter mouse height in pixels (default 30): ")
             or "30",
+            "edge_mapping": input("Enable edge mapping? (Y/N): ").upper() == "Y"
         }
 
     def save_config(self):

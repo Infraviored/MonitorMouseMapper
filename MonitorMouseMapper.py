@@ -387,28 +387,31 @@ try:
             if do_print:
                 print(f"\r X: {x}, Y: {y}", end="   ", flush=True)
 
-            # Only check the safety region around the border, but don't limit based on monitor width
-            # since that would prevent jumps from positions beyond the top monitor's width
+            # Only check if we're in the safety region around the border (near y boundary)
+            # Important: We no longer check x >= top_width which was preventing jumps from wider monitors
             if abs(y - self.top_height) >= int(self.config["safety_region"]):
                 return
 
             if self.do_jump and self.prev_y is not None:
-                if (y >= self.top_height and self.prev_y < self.top_height) or (
-                    y < self.top_height and self.prev_y >= self.top_height
-                ):
-                    direction = "down" if y >= self.top_height else "up"
-                    # Only on jump: print debug blob
+                # Check if we're crossing the boundary between monitors
+                crossing_up = (y < self.top_height and self.prev_y >= self.top_height)
+                crossing_down = (y >= self.top_height and self.prev_y < self.top_height)
+                
+                if crossing_up or crossing_down:
+                    direction = "down" if crossing_down else "up"
+                    # Log details about the crossing
                     print(f"\n[DEBUG] Crossing border! Direction: {direction}, x: {x}, prev_y: {self.prev_y}, y: {y}")
+                    
+                    # Calculate the new X position for the jump
                     new_x = self.handle_jump(x, direction, debug=True)
-                    # Only move if handle_jump returned a valid coordinate (not None)
+                    
+                    # Only move mouse if handle_jump returned a valid coordinate (not None)
                     if new_x is not None:
-                        print(f"JUMPED {direction.upper()}")
+                        print(f"JUMPED {direction.upper()}: to new x position {new_x}")
                         self.mouse_controller.position = (new_x, y)
                     else:
-                        # If crossing border but handle_jump returned None (no jump), 
-                        # or if not crossing border, new_x remains the original x.
-                        # This assignment might be redundant depending on initial value, but ensures clarity.
-                        new_x = x 
+                        print(f"NO JUMP: handle_jump returned None")
+                        new_x = x  # Keep original position
             else:
                 new_x = x
 
@@ -479,6 +482,13 @@ try:
             # --- 3. Calculate Physical Position on Source Monitor --- 
             # Cursor X relative to the source monitor's left edge (in pixels)
             old_x_rel_px = old_x_abs - source_x_offset
+            
+            # Check if cursor is within bounds of the source monitor
+            if old_x_rel_px < 0 or old_x_rel_px > source_width_px:
+                if debug:
+                    print(f"[DEBUG] Warning: Cursor X position ({old_x_rel_px}) is outside source monitor bounds (0 to {source_width_px}).")
+                    print(f"[DEBUG] Will continue calculation but results may be unexpected.")
+            
             # Physical distance from the source monitor's physical left edge (in mm)
             source_physical_pos_mm = old_x_rel_px / source_dpi
 
@@ -560,6 +570,10 @@ try:
             # --- 5. Convert Target Physical Position to Destination Pixels --- 
             # Target X relative to the destination monitor's left edge (in pixels)
             new_x_rel_px = target_physical_pos_rel_dest_mm * dest_dpi
+            
+            # Ensure result is within destination monitor's bounds
+            new_x_rel_px = max(0, min(new_x_rel_px, dest_width_px))
+            
             # Target absolute X coordinate
             new_x_abs = dest_x_offset + new_x_rel_px
 

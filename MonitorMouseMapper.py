@@ -186,7 +186,12 @@ try:
             self.set_additional_properties()
             self.get_and_set_monitor_info()
             self.set_monitor_position()
+            
+            # Initialize mouse tracking variables
             self.prev_y = None
+            self.prev_x = None
+            self.zone_entry_pos = None  # Position where mouse entered the boundary zone
+            self.in_boundary_zone = False  # Whether we're in the boundary zone
             self.do_jump = True
             self.mouse_controller = Controller()
             self.set_mousespeed()
@@ -382,17 +387,33 @@ try:
                 )
 
         def supervise_mouse_position(self, x, y):
-            """Print the mouse position and handle jumps when crossing monitor boundaries."""
+            """Print the mouse position and handle jumps when crossing monitor boundaries.
+            Tracks mouse movement trajectory to calculate vector-based jumping."""
             # Always print X/Y inline
             if do_print:
                 print(f"\r X: {x}, Y: {y}", end="   ", flush=True)
 
-            # Only check if we're in the safety region around the border (near y boundary)
-            # Important: We no longer check x >= top_width which was preventing jumps from wider monitors
-            if abs(y - self.top_height) >= int(self.config["safety_region"]):
+            # Define the boundary zone (the area where we start tracking trajectory)
+            boundary_zone_size = int(self.config["safety_region"])
+            near_boundary = abs(y - self.top_height) < boundary_zone_size
+            
+            # If we're far from the boundary, exit early and reset zone tracking
+            if not near_boundary:
+                if self.in_boundary_zone:
+                    self.in_boundary_zone = False
+                    self.zone_entry_pos = None
+                    if do_print and self.zone_entry_pos:
+                        print(f"\nExited boundary zone at ({x}, {y})")
                 return
+            
+            # We're in boundary zone, track entry point if we just entered
+            if not self.in_boundary_zone:
+                self.in_boundary_zone = True
+                self.zone_entry_pos = (x, self.prev_y if self.prev_y is not None else y)
+                if do_print:
+                    print(f"\nEntered boundary zone at ({x}, {y})")
 
-            if self.do_jump and self.prev_y is not None:
+            if self.do_jump and self.prev_y is not None and self.prev_x is not None:
                 # Check if we're crossing the boundary between monitors
                 crossing_up = (y < self.top_height and self.prev_y >= self.top_height)
                 crossing_down = (y >= self.top_height and self.prev_y < self.top_height)
@@ -400,23 +421,133 @@ try:
                 if crossing_up or crossing_down:
                     direction = "down" if crossing_down else "up"
                     # Log details about the crossing
-                    print(f"\n[DEBUG] Crossing border! Direction: {direction}, x: {x}, prev_y: {self.prev_y}, y: {y}")
+                    print(f"\n[DEBUG] Crossing border! Direction: {direction}, x: {x}, prev_x: {self.prev_x}, prev_y: {self.prev_y}, y: {y}")
                     
-                    # Calculate the new X position for the jump
-                    new_x = self.handle_jump(x, direction, debug=True)
+                    # Use boundary zone entry point to calculate trajectory if available
+                    if self.zone_entry_pos:
+                        # Calculate the new X position using trajectory vector
+                        entry_x, entry_y = self.zone_entry_pos
+                        border_x = x  # Current X at border crossing
+                        
+                        print(f"[DEBUG] Using trajectory from entry point ({entry_x}, {entry_y}) to border point ({border_x}, {y})")
+                        new_x = self.handle_jump_with_trajectory(x, direction, entry_x, entry_y, debug=True)
+                    else:
+                        # Fallback to normal jump if no entry point recorded
+                        print(f"[DEBUG] No entry point recorded, using standard jump calculation")
+                        new_x = self.handle_jump(x, direction, debug=True)
                     
-                    # Only move mouse if handle_jump returned a valid coordinate (not None)
+                    # Only move mouse if jump calculation returned a valid coordinate (not None)
                     if new_x is not None:
                         print(f"JUMPED {direction.upper()}: to new x position {new_x}")
                         self.mouse_controller.position = (new_x, y)
+                        
+                        # Reset boundary zone tracking after jump
+                        self.in_boundary_zone = False
+                        self.zone_entry_pos = None
                     else:
-                        print(f"NO JUMP: handle_jump returned None")
+                        print(f"NO JUMP: jump calculation returned None")
                         new_x = x  # Keep original position
             else:
                 new_x = x
 
+            # Save current position for next iteration
+            self.prev_x = x
             self.prev_y = y
 
+        def handle_jump_with_trajectory(self, border_x_abs, direction, entry_x_abs, entry_y, debug=False):
+            """Calculate jump position using trajectory vector approach.
+            
+            Args:
+                border_x_abs: Absolute X position where border was crossed
+                direction: 'up' (bottom to top) or 'down' (top to bottom)
+                entry_x_abs: Absolute X position where boundary zone was entered
+                entry_y: Y position where boundary zone was entered
+                debug: Whether to print debug information
+                
+            Returns:
+                The calculated new absolute X-coordinate on the destination monitor,
+                or None if the jump should not occur.
+            """
+            if debug:
+                print(f"[DEBUG] ---- handle_jump_with_trajectory ({direction}) ----")
+                print(f"[DEBUG] Entry point: ({entry_x_abs}, {entry_y})")
+                print(f"[DEBUG] Border crossing: ({border_x_abs}, {self.top_height})")
+            
+            # Calculate trajectory vector (dx, dy)
+            dx = border_x_abs - entry_x_abs
+            border_y = self.top_height if direction == "up" else self.top_height + 1  # Y at border
+            dy = border_y - entry_y
+            
+            # Avoid division by zero
+            if dy == 0:
+                if debug:
+                    print("[DEBUG] Horizontal movement detected (dy=0), using standard mapping")
+                return self.handle_jump(border_x_abs, direction, debug)
+            
+            # Calculate trajectory slope
+            slope = dx / dy
+            if debug:
+                print(f"[DEBUG] Movement vector: ({dx}, {dy}), slope: {slope:.2f}")
+            
+            # Determine target monitor dimensions for trajectory calculation
+            if direction == "down":  # Top -> Bottom
+                source_width_mm = self.top_width_mm
+                dest_width_mm = self.bottom_width_mm
+                dest_width_px = self.bottom_width
+                dest_x_offset = self.bottom_x_offset
+            else:  # Bottom -> Top
+                source_width_mm = self.bottom_width_mm
+                dest_width_mm = self.top_width_mm
+                dest_width_px = self.top_width
+                dest_x_offset = self.top_x_offset
+            
+            # Get standard mapping first (as reference point)
+            std_x_abs = self.handle_jump(border_x_abs, direction, debug=False)
+            if std_x_abs is None:
+                if debug:
+                    print("[DEBUG] Standard mapping returned None, cannot calculate trajectory jump")
+                return None
+            
+            # Calculate how far across source monitor (in %) we are - using physical width
+            std_x_rel = std_x_abs - dest_x_offset
+            center_offset_px = (dest_width_px / 2) - std_x_rel
+            
+            # Scale the trajectory vector based on physical width ratio
+            width_ratio = dest_width_mm / source_width_mm
+            scaled_slope = slope * width_ratio
+            
+            # Apply the trajectory:
+            # - If perfectly vertical (slope=0), land at the standard X position
+            # - Otherwise, adjust landing position based on trajectory vector
+            if abs(slope) < 0.01:  # Nearly vertical movement
+                new_x_abs = std_x_abs
+                if debug:
+                    print(f"[DEBUG] Nearly vertical movement, using standard mapping: {new_x_abs}")
+            else:
+                # Calculate extended movement based on slope
+                # For steeper approach angles, reduce the effect
+                angle_factor = min(1.0, 1.0 / abs(scaled_slope) if abs(scaled_slope) > 1 else 1.0)
+                
+                # Calculate extension based on movement direction
+                # How much extra to extend the trajectory based on monitor crossing distance
+                extension = center_offset_px * angle_factor * 0.5  # Adjustable factor
+                
+                # Apply extension to get final position
+                new_x_abs = std_x_abs + (extension * (1 if scaled_slope > 0 else -1))
+                
+                # Ensure within monitor bounds
+                new_x_abs = max(dest_x_offset, min(dest_x_offset + dest_width_px, new_x_abs))
+                
+                if debug:
+                    print(f"[DEBUG] Standard mapping would jump to: {std_x_abs}")
+                    print(f"[DEBUG] Angle factor: {angle_factor:.2f}, Extension: {extension:.2f}px")
+                    print(f"[DEBUG] Trajectory-based jump to: {new_x_abs}")
+            
+            if debug:
+                print(f"[DEBUG] ---- End handle_jump_with_trajectory ----")
+            
+            return int(round(new_x_abs))
+            
         def handle_jump(self, old_x_abs, direction, debug=False):
             """Calculates the new X-coordinate when crossing monitor boundaries,
             aiming to preserve the physical horizontal position.

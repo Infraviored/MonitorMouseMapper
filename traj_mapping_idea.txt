@@ -1,0 +1,25 @@
+
+In a similar fashion we need to have a logic to handle the jumps. 
+
+I think the best idea is to work completely from the logic with physical dimensions.
+We always convert the pixels of the monitor we are on and its information (where he is in pixel offset and his resoltuion) to get the physical worls location of the cursor.
+we define WorldToPixels(. .) and PixelsToWorls(. .) per monitor.
+
+
+where we have the 1:1 corresponding line, we do a direct transition.
+say we move from Top to Bottom:
+Mouse is at physical_mouse = Top.PixelsToWorld(pixel_mouse) in world coordinates.
+We come by the 1:1 line:
+we calculate Bottom.WorldToPixels(physical_mouse) for the mapping.
+
+Now assume we move in an angle from the bottom monitor towards its right side:
+On the trajectory line segments we will:
+Note the physical position of entering the trajectory_padding_distance
+note the physical position at the trajectory_line_segments
+calulate the line between these poitns
+see if intersects with the trajectory_line_segments of the top monitors
+
+if so, use ThisMonitor.WorldToPixels(physical_mouse) for the mapping
+
+otherwise, NOthing.
+

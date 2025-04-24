@@ -387,10 +387,9 @@ try:
             if do_print:
                 print(f"\r X: {x}, Y: {y}", end="   ", flush=True)
 
-            if (
-                abs(y - self.top_height) >= int(self.config["safety_region"])
-                or x >= self.top_width
-            ):
+            # Only check the safety region around the border, but don't limit based on monitor width
+            # since that would prevent jumps from positions beyond the top monitor's width
+            if abs(y - self.top_height) >= int(self.config["safety_region"]):
                 return
 
             if self.do_jump and self.prev_y is not None:
